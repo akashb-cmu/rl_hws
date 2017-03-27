@@ -151,8 +151,9 @@ def main():  # noqa: D103
     parser.add_argument('--lr', default=0.0003, type=float, help='Learning Rate')
     parser.add_argument('--batch_size', default=32, type=int, help='Batch Size')
     parser.add_argument('--burn_in', default=50000, type=int, help='Burn In Time')
-    parser.add_argument('--eval_freq', default=10000, type=int, help='Evaluation Frequency')
-    parser.add_argument('--target_update_freq',default=5000,type=int, help='Target Update Frequency')
+    parser.add_argument('--eval_freq', default=40000, type=int, help='Evaluation Frequency')
+    parser.add_argument('--target_update_freq',default=10000,type=int, help='Target Update Frequency')
+    parser.add_argument('--tot_frames',default=5000000,type=int, help='Total Number of Frames')
     
     args = parser.parse_args()
     name = Name(args, 'output', 'model')
@@ -175,6 +176,7 @@ def main():  # noqa: D103
     num_actions = train_env.action_space.n
 
     gamma = 0.99
+    tot_frames  = args.tot_frames
     target_update_freq = args.target_update_freq
     num_burn_in = args.burn_in
     train_freq = 1
@@ -209,6 +211,7 @@ def main():  # noqa: D103
     agent.compile('rmsprop', 'huber_loss', args.lr)
     
     agent.fit_akash(train_env,env,
+                    tot_frames=tot_frames,
                     burn_in_time=num_burn_in,
                     eval_plot_period=eval_freq,
                     target_fix_freq=target_update_freq,

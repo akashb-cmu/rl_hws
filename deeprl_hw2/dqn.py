@@ -219,10 +219,13 @@ class DQNAgent:
         for i in tqdm(range(tot_frames)):
             if prev_sample is None or prev_sample.is_terminal:
                 if prev_sample is not None:
-                    tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, buffer: %f, count: %d' % (
-                        running_loss / (i+1.0), np.sum(running_reward)/(episode_count), episode_loss/(frames_per_episode*1.0), episode_reward,
-                        exploration_policy.curr_epsilon,
-                        (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity, frames_per_episode))
+                    tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, buffer: %f, count: %d' %(running_loss / (i+1.0),
+                                                                                                                                     np.sum(running_reward)/(episode_count),
+                                                                                                                                     episode_loss/(frames_per_episode*1.0),
+                                                                                                                                     episode_reward,
+                                                                                                                                     exploration_policy.curr_epsilon,
+                                                                                                                                     (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity,
+                                                                                                                                     frames_per_episode))
 
                 episode_count += 1.0
                 prev_sample = get_first_state(env=train_env, preproc=train_preproc,render=render,ret_reward=False)
@@ -261,6 +264,7 @@ class DQNAgent:
                 running_reward.append(prev_sample.reward)
                 episode_reward += prev_sample.reward
                 episode_loss += loss.history['loss'][0]
+
 
             if i>burn_in_time and use_target_fix and (i+1)%target_fix_freq == 0:
                 self.Q_cap.set_weights(self.Q.get_weights())

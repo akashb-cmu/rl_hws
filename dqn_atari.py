@@ -200,7 +200,7 @@ def main():  # noqa: D103
 
     agent.compile('adam', 'huber_loss')
     
-    agent.fit_akash(train_env,env)
+    agent.fit_akash(train_env,env, burn_in_time=0)
     pdb.set_trace()
 
 if __name__ == '__main__':

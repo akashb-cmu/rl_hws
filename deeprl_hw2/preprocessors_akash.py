@@ -78,6 +78,7 @@ class HistoryPreprocessor(Preprocessor):
         else:
             assert None not in [curr_state_id, action, reward, is_terminal, self.replay_mem_cache], "Requisite args not" \
                    " provided for state registration!"
+            reward = super(HistoryPreprocessor, self).process_reward(reward)
             new_state_id = self.replay_mem_cache.register_state(state_for_mem, curr_state_id)
             mem_sample = StorageSample(action=action,curr_ip_state_id=curr_state_id,next_state_id=new_state_id,reward=reward,
                                        is_terminal=is_terminal)
@@ -202,6 +203,7 @@ class AtariPreprocessor(Preprocessor):
         else:
             assert None not in [curr_state_id, action, reward, is_terminal, self.replay_mem_cache], "Requisite args " \
                    "not provided for state registration!"
+            reward = super(AtariPreprocessor, self).process_reward(reward)
             new_state_id = self.replay_mem_cache.register_state(state_for_mem, curr_state_id)
             mem_sample = StorageSample(action=action, curr_ip_state_id=curr_state_id, next_state_id=new_state_id,
                                        reward=reward, is_terminal=is_terminal)

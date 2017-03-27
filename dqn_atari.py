@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """Run Atari Environment with DQN."""
+
 import argparse
 import os
 import random
@@ -10,11 +11,10 @@ import gym
 
 #import deeprl_hw2 as tfrl
 from deeprl_hw2.dqn import DQNAgent
-from deeprl_hw2.preprocessors import *
-from deeprl_hw2.core import ReplayMemory
+#from deeprl_hw2.preprocessors import *
+#from deeprl_hw2.core import ReplayMemory
 
 import pdb
-
 import keras.models as M
 import keras.layers as L
 
@@ -156,17 +156,17 @@ def main():  # noqa: D103
     # here is where you should start up a session,
     # create your DQN agent, create your model, etc.
     # then you can run your fit method.
-
     ## Initialize environment
     print(args)
+    train_env = gym.make(args.env)
+    train_env.reset()
     env = gym.make(args.env)
     env.reset()
-    
     ## Arguments
     window = 4
     input_shape = args.input_shape
 
-    num_actions = env.action_space.n
+    num_actions = train_env.action_space.n
 
     gamma = 0.99
     target_update_freq = 100
@@ -182,14 +182,12 @@ def main():  # noqa: D103
     Q_cap.set_weights(Q.get_weights())
     
     ## Preprocessor
-    preprocessor = AtariPreprocessor(input_shape, window)
+#    preprocessor = AtariPreprocessor(input_shape, window)
 
     ## Memory
-    memory = ReplayMemory(num_burn_in, window_length=window)
+#    memory = ReplayMemory(num_burn_in, window_length=window)
     
     agent = DQNAgent(q_network = [Q, Q_cap],
-                     preprocessor = preprocessor,
-                     memory = memory,
                      gamma = gamma,
                      target_update_freq = target_update_freq,
                      num_burn_in = num_burn_in,
@@ -199,9 +197,10 @@ def main():  # noqa: D103
                      epsilon = epsilon,
                      num_actions = num_actions,
                      mode='train')
-    
+
     agent.compile('adam', 'huber_loss')
-    agent.fit(env,1000,1000)
+    
+    agent.fit_akash(train_env,env)
     pdb.set_trace()
 
 if __name__ == '__main__':

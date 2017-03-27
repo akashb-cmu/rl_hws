@@ -12,6 +12,10 @@ import gym
 from dqn_utils import *
 from policy_akash import *
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+
 class DQNAgent:
     """Class implementing DQN.
 
@@ -53,8 +57,6 @@ class DQNAgent:
     
     def __init__(self,
                  q_network,
-                 preprocessor,
-                 memory,
                  gamma,
                  target_update_freq,
                  num_burn_in,
@@ -66,8 +68,8 @@ class DQNAgent:
                  mode='train'):
 
         self.Q, self.Q_cap = q_network[0], q_network[1]
-        self.preprocessor = preprocessor
-        self.memory = memory
+#        self.preprocessor = preprocessor
+#        self.memory = memory
         self.gamma = gamma
         self.target_update_freq = target_update_freq
         self.num_burn_in = num_burn_in
@@ -167,8 +169,8 @@ class DQNAgent:
 
 
 
-    def fit_akash(self, train_env=gym.make('SpaceInvaders-v0'), eval_env=gym.make('SpaceInvaders-v0'), n_hist_history=4,
-                  n_atari_history=4, crop_size=(100,100), block_size=(2,2), mem_size=1000000,
+    def fit_akash(self, train_env, eval_env, n_hist_history=4,
+                  n_atari_history=4, crop_size=(84,84), block_size=(2,2), mem_size=1000000,
                   batch_size=32, eval_batch_size=100, gamma=0.99, start_epsilon=1.0, end_epsilon=0.1,
                   epsilon_anneal_steps=1000000,
                   tot_frames=10000000, eval_states=100, n_eval_episodes=20, eval_plot_period=30000, use_target_fix=True,
@@ -214,17 +216,20 @@ class DQNAgent:
         episode_count = 0.0
         frames_per_episode = 0.0
 
-        for i in range(tot_frames):
+        for i in tqdm(range(tot_frames)):
             if prev_sample is None or prev_sample.is_terminal:
+                if prev_sample is not None:
+                    tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, buffer: %f, count: %d' % (
+                        running_loss / (i+1.0), np.sum(running_reward)/(episode_count), episode_loss/(frames_per_episode*1.0), episode_reward,
+                        exploration_policy.curr_epsilon,
+                        (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity, frames_per_episode))
+
                 episode_count += 1.0
                 prev_sample = get_first_state(env=train_env, preproc=train_preproc,render=render,ret_reward=False)
-                tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, buffer: %f, count: %d' % (
-                    running_loss / (episode_count), np.sum(running_reward)/(episode_count), episode_loss, episode_reward,
-                    exploration_policy.curr_epsilon,
-                    (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity, frames_per_episode))
                 frames_per_episode = 1
                 episode_reward = 0
                 episode_loss = 0
+
             else:
                 action = get_action(preproc=train_preproc, prev_sample=prev_sample, policy=exploration_policy,
                                     q_net=self.Q,
@@ -232,6 +237,8 @@ class DQNAgent:
                 prev_sample = get_next_sample(env=train_env, preproc=train_preproc, action=action,
                                               prev_sample=prev_sample, render=render)
                 frames_per_episode += 1
+ 
+
             if i > burn_in_time:
                 sampled_experience_batch = train_replay_cache.sample(batch_size=batch_size)
                 batch_curr_states, batch_next_states, actions, rewards, is_terminals = train_preproc.process_batch(
@@ -250,10 +257,10 @@ class DQNAgent:
                     else:
                         y[m, next_actions[m]] = target_vec[m]
                 loss = self.Q.fit(batch_curr_states, y, epochs=1, batch_size=self.batch_size, verbose=0)
-            running_loss += loss.history['loss'][0]
-            running_reward.append(prev_sample.reward)
-            episode_reward += prev_sample.reward
-            episode_loss += loss.history['loss'][0]
+                running_loss += loss.history['loss'][0]
+                running_reward.append(prev_sample.reward)
+                episode_reward += prev_sample.reward
+                episode_loss += loss.history['loss'][0]
 
             if i>burn_in_time and use_target_fix and (i+1)%target_fix_freq == 0:
                 self.Q_cap.set_weights(self.Q.get_weights())

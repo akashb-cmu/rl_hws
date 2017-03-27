@@ -1,5 +1,8 @@
 import numpy as np
 from skimage.measure import block_reduce
+from PIL import Image
+import pdb
+
 """Core classes."""
 
 
@@ -123,8 +126,14 @@ class Preprocessor(object):
         :param use_float:
         :return:
         """
-        return np.array(self.crop(self.downsample(self.rgb2grey(raw_image), block_size=block_size),
-                                  crop_size=crop_size), dtype=np.float32 if use_float else np.uint8)
+        # return np.array(self.crop(self.downsample(self.rgb2grey(raw_image), block_size=block_size),
+        #                           crop_size=crop_size), dtype=np.float32 if use_float else np.uint8)
+
+        state = Image.fromarray(raw_image)
+        state = state.convert('YCbCr')
+        state = state.resize(crop_size, Image.ANTIALIAS)
+        state = np.array(state)
+        return state[:,:,0]
 
     ####################################################################################################################
     #                                     TEMPLATE FUNCTIONS TO BE OVERRIDDEN                                          #

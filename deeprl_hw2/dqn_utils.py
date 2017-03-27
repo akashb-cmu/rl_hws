@@ -1,16 +1,17 @@
 import gym
 import cPickle
-import torch
-import torch.autograd as A
-import torch.nn as NN
-import torch.nn.functional as F
-import torch.optim as O
-from core import Preprocessor, ReplayMemory
-from preprocessors import HistoryPreprocessor, AtariPreprocessor, PreprocessorSequence
+#import torch
+#import torch.autograd as A
+#import torch.nn as NN
+#import torch.nn.functional as F
+#import torch.optim as O
+from core_akash import Preprocessor, ReplayMemory
+from preprocessors_akash import HistoryPreprocessor, AtariPreprocessor, PreprocessorSequence
 import matplotlib.pyplot as plt
-from Q_Networks import DQN_Mnih, DQN_Mnih_BNorm
-from objectives import *
-from policy import *
+#from Q_Networks import DQN_Mnih, DQN_Mnih_BNorm
+#from objectives import *
+#from policy import *
+import numpy as np
 
 def get_action_mask(batch_q_values, actions):
     action_mask = np.zeros(batch_q_values.size(),dtype=np.float32)
@@ -48,10 +49,10 @@ def get_first_state(env, preproc, render=False, ret_reward=False):
     return get_next_sample(env, preproc=preproc, action=action, prev_sample=None, render=render, ret_reward=ret_reward)
 
 def get_action(preproc, prev_sample, policy, q_net, use_gpu, is_train=True):
-    curr_state, next_state, action, reward = preproc.process_state_for_network(prev_sample)
+    curr_state, next_state, action, reward, is_terminal = preproc.process_state_for_network(prev_sample)
     # prev_q_input = np.array([next_state], dtype=np.float32)
     prev_q_input = np.expand_dims(next_state, axis=0)
-    prev_q_values = q_net.predict_with_batch(prev_q_input)
+    prev_q_values = q_net.predict_on_batch(prev_q_input)
     return policy.select_action(prev_q_values, is_train)
 
 def evaluate_qs(eval_batch_curr_states, net, use_gpu, num_updates=None, plot_qs=None, show=True):

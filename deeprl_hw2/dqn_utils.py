@@ -10,7 +10,7 @@ from preprocessors_akash import HistoryPreprocessor, AtariPreprocessor, Preproce
 import matplotlib.pyplot as plt
 #from Q_Networks import DQN_Mnih, DQN_Mnih_BNorm
 #from objectives import *
-#from policy import *
+from policy_akash import *
 import numpy as np
 
 def get_action_mask(batch_q_values, actions):
@@ -55,14 +55,9 @@ def get_action(preproc, prev_sample, policy, q_net, use_gpu, is_train=True):
     prev_q_values = q_net.predict_on_batch(prev_q_input)
     return policy.select_action(prev_q_values, is_train)
 
-def evaluate_qs(eval_batch_curr_states, net, use_gpu, num_updates=None, plot_qs=None, show=True):
-    if use_gpu:
-        eval_batch_curr_states = eval_batch_curr_states.cuda()
-    eval_qs = net(eval_batch_curr_states)
-    if not use_gpu:
-        max_qs = eval_qs.max(1)[0].data.numpy()
-    else:
-        max_qs = eval_qs.max(1)[0].cpu().data.numpy()
+def evaluate_qs(eval_batch_curr_states, net, num_updates=None, plot_qs=None, show=True):
+    eval_qs = net.predict_on_batch(eval_batch_curr_states)
+    max_qs = eval_qs.max(axis=1)
     if plot_qs is not None and num_updates is not None:
         plot_qs.append((num_updates, max_qs.mean()))
     if show and plot_qs is not None and len(plot_qs)>0:
@@ -71,37 +66,34 @@ def evaluate_qs(eval_batch_curr_states, net, use_gpu, num_updates=None, plot_qs=
         plt.plot(xs, ys)
         plt.show()
 
-def evaluate_rewards(env, preproc, net, n_episodes, use_gpu, video_file_path=None, iter_num=None, rewards_history=None,
+def evaluate_rewards(env, preproc, net, n_episodes, iter_num=None, rewards_history=None,
                      eval_epsilon=0.05, plot=False):
     # Ensure the env passed here is different from the env used for training
-    if video_file_path is not None:
-        env = gym.wrappers.Monitor(env,directory=video_file_path)#, video_callable=,write_upon_reset=)
     eval_sample = get_first_state(env=env, preproc=preproc, render=False)
-
-    avg_reward = 0.0
-    tot_episodes = n_episodes
-
+    rewards_list = []
+    episode_reward = 0.0
     greedy_policy = GreedyEpsilonPolicy(epsilon=eval_epsilon)
 
     while n_episodes>0:
         if eval_sample.is_terminal:
+            rewards_list.append(episode_reward)
             n_episodes -= 1
             eval_sample, eval_reward = get_first_state(env=env, preproc=preproc, render=False, ret_reward=True)
+            episode_reward = 0.0
         else:
             action = get_action(preproc=preproc, prev_sample=eval_sample, policy=greedy_policy, q_net=net,
-                                use_gpu=use_gpu, is_train=False)
+                                use_gpu=True, is_train=False)
             eval_sample, eval_reward = get_next_sample(env=env, preproc=preproc, action=action, prev_sample=eval_sample,
                                           render=False, ret_reward=True)
-        # avg_reward += eval_sample.reward
-        avg_reward += eval_reward
-        if eval_reward!=eval_sample.reward:
-            print("Rewards are different with actual reward=%f and clipped reward=%f"%(eval_reward, eval_sample.reward))
-    avg_reward = avg_reward / tot_episodes
+        episode_reward += eval_reward
+
+    rewards_list = np.array(rewards_list)
+
     if iter_num is not None and rewards_history is not None:
-        rewards_history.append((iter_num, avg_reward))
+        rewards_history.append((iter_num, rewards_list.mean(), rewards_list.std()))
     if plot and rewards_history is not None:
         xs = [tup[0] for tup in rewards_history]
         ys = [tup[1] for tup in rewards_history]
         plt.plot(xs, ys)
         plt.show()
-    return avg_reward
+    return rewards_list

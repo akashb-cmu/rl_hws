@@ -39,7 +39,7 @@ class ConvModel():
         model.add(L.Conv2D(64,4,strides=2, activation='relu', data_format='channels_first'))
         model.add(L.Conv2D(64,3,strides=1, activation='relu', data_format='channels_first'))
         model.add(L.Flatten())
-        model.add(L.Dense(512))
+        model.add(L.Dense(512, activation='relu'))
         model.add(L.Dense(num_actions))
         model.output_shape
 

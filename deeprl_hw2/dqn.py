@@ -17,6 +17,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import json
+from log_utils import huber_loss
 
 class DQNAgent:
     """Class implementing DQN.
@@ -95,12 +96,15 @@ class DQNAgent:
         """
 
         if optimizer == 'adam':
-            self.optimizer = O.Adam(lr=0.0001)
+            self.optimizer = O.Adam(lr=lr)
+        elif optimizer == 'rmsprop':
+            self.optimizer = O.RMSprop(lr=lr, epsilon=1e-2)
         else:
             assert 1, 'Optimizer not found'
 
         if loss_func == 'huber_loss':
-            self.loss_func = losses.mean_squared_error
+            self.loss_func = huber_loss
+#            self.loss_func = losses.mean_squared_error
         else:
             assert 1, 'Loss function not found'
 
@@ -233,15 +237,16 @@ class DQNAgent:
             if prev_sample is None or prev_sample.is_terminal:
                 if prev_sample is not None:
                     tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, '
-                               'buffer: %f, count: %d' %(running_loss / (i+1.0),
-                                                 np.sum(running_reward)/(episode_count),
+                               'buffer: %f, count: %d' %(running_loss / (i-burn_in_time+1.0),
+                                                 np.sum(running_reward)/(episode_count+1.0),
                                                  episode_loss/(frames_per_episode*1.0),
                                                  episode_reward,
                                                  exploration_policy.curr_epsilon,
                                                  (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity,
                                                  frames_per_episode))
-
-                episode_count += 1.0
+                if i > burn_in_time:
+                    episode_count += 1.0
+                    
                 prev_sample = get_first_state(env=train_env, preproc=train_preproc,render=render,ret_reward=False)
                 frames_per_episode = 1
                 episode_reward = 0

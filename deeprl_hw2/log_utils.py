@@ -58,3 +58,15 @@ def save_vid(name, folder):
                     vid = np.expand_dims(np.zeros_like(observation), axis=0)
                 skvideo.io.vwrite(name('vid%d'%(i_episode),'.mp4', folder), vid)
                 break
+
+
+import theano
+import theano.tensor as T
+
+def huber_loss(y_true, y_pred):
+    delta = 1
+    d = y_pred - y_true
+    a = .5 * d**2
+    b = delta * (abs(d) - delta / 2.)
+    l = T.switch(abs(d) <= delta, a, b)
+    return T.mean(T.sum(l, axis=1), axis=0) 

@@ -206,7 +206,7 @@ def main():  # noqa: D103
                      folder=args.output,
                      mode='train')
 
-    agent.compile('adam', 'huber_loss', args.lr)
+    agent.compile('rmsprop', 'huber_loss', args.lr)
     
     agent.fit_akash(train_env,env,
                     burn_in_time=num_burn_in,

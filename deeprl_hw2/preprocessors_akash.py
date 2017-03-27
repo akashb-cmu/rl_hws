@@ -1,13 +1,12 @@
 """Suggested Preprocessors."""
 
 import numpy as np
-from PIL import Image
 from collections import deque
 
 
 # import utils
 # from deeprl_hw2.core import Preprocessor
-from core import Preprocessor, StorageSample, Sample
+from core_akash import Preprocessor, StorageSample, Sample
 
 class HistoryPreprocessor(Preprocessor):
     """Keeps the last k states.

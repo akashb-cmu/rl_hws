@@ -5,8 +5,6 @@ import os
 import random
 
 import numpy as np
-import torch
-import torch.nn.functional as F
 
 import gym
 
@@ -17,46 +15,49 @@ from deeprl_hw2.core import ReplayMemory
 
 import pdb
 
+import keras.models as M
+import keras.layers as L
 
-class LinearModel(torch.nn.Module):
+class LinearModel():
     def __init__(self, window, input_shape, num_actions):
-        super(LinearModel, self).__init__()
-        self.window = window
-        self.input_shape = input_shape
-        self.num_actions = num_actions
-        self.input_size = window*np.multiply(*input_shape)
+        self.model = model = M.Sequential()
+        model.add(L.Flatten(input_shape=tuple([window]+list(input_shape))))
+        model.add(L.Dense(num_actions))
+        model.output_shape
 
-        self.affine = torch.nn.Linear(self.input_size, num_actions)
 
-    def forward(self, x):
-        x = x.resize(x.size(0), self.input_size)
-        x = self.affine(x)
-        return x
+    def __call__(self):
+        return self.model
 
-class ConvModel(torch.nn.Module):
+    
+class ConvModel():
     def __init__(self, window, input_shape, num_actions):
-        super(ConvModel, self).__init__()
-        self.window = window
-        self.input_shape = input_shape
-        self.num_actions = num_actions
-        self.conv_out = 64*7*7
+        self.model = model = M.Sequential()
+        model.add(L.Conv2D(32,8,strides=4, activation='relu', input_shape=tuple([window]+list(input_shape)),data_format='channels_first'))
+        model.add(L.Conv2D(64,4,strides=2, activation='relu', data_format='channels_first'))
+        model.add(L.Conv2D(64,3,strides=1, activation='relu', data_format='channels_first'))
+        model.add(L.Flatten())
+        model.add(L.Dense(512))
+        model.add(L.Dense(num_actions))
+        model.output_shape
 
-        self.conv1 = torch.nn.Conv2d(window, 32, (8,8), 4)
-        self.conv2 = torch.nn.Conv2d(32, 64, (4,4), 2)
-        self.conv3 = torch.nn.Conv2d(64, 64, (3,3), 1)
-        self.affine1 = torch.nn.Linear(self.conv_out, 512)
-        self.affine2 = torch.nn.Linear(512, num_actions)
+    def __call__(self):
+        return self.model
 
-    def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
+# class MLP():
+#     def __init__(self, window, input_shape, num_actions):
+#         super(MLP, self).__init__()
+#         self.input_shape = reduce(lambda x,y: x*y, input_shape)
+#         self.num_actions = num_actions
 
-        x = x.resize(x.size(0), self.conv_out)
-        x = F.relu(self.affine1(x))
-        x = self.affine2(x)
-        return x
+#         self.affine1 = torch.nn.Linear(self.input_shape, 16)
+#         self.affine2 = torch.nn.Linear(16, num_actions)
 
+#     def forward(self, x):
+# #        x = x.view(-1)
+#         x = self.affine1(x)
+# #        x = self.affine2(x)
+#         return x
 
 def create_model(window, input_shape, num_actions,
                  model_name='linear'):  # noqa: D103
@@ -89,9 +90,14 @@ def create_model(window, input_shape, num_actions,
       The Q-model.
     """
     if (model_name == 'linear'):
-        return LinearModel(window, input_shape, num_actions)
+        model = LinearModel(window, input_shape, num_actions)
+        return model()
     elif (model_name == 'conv'):
-        return ConvModel(window, input_shape, num_actions)
+        model = ConvModel(window, input_shape, num_actions) 
+        return model()
+    elif model_name == 'mlp':
+        model = MLP(window, input_shape, num_actions) 
+        return model()
     else:
         assert 1, 'Model not found'
     
@@ -141,9 +147,9 @@ def main():  # noqa: D103
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     parser.add_argument('-m','--model', default='linear', type=str, help='type of model')
     parser.add_argument('--gpu', default=0, type=int, help='gpu (0 or more) vs cpu (-1)')
+    parser.add_argument('--input_shape', default=[84,84], type=int, nargs='+', help='input shape')
 
     args = parser.parse_args()
-#    args.input_shape = tuple(args.input_shape)
 
 #    args.output = get_output_folder(args.output, args.env)
 
@@ -158,25 +164,23 @@ def main():  # noqa: D103
     
     ## Arguments
     window = 4
-    input_shape = (84,84)
+    input_shape = args.input_shape
+
     num_actions = env.action_space.n
 
     gamma = 0.99
     target_update_freq = 100
     num_burn_in = 100000
     train_freq = 1
+    eval_freq = 10 # after no. of episodes
     batch_size = 32
     epsilon = 1 ## make a decreasing epsilon
 
     ## Initialise Q Model
     Q = create_model(window, input_shape, num_actions, args.model)
     Q_cap = create_model(window, input_shape, num_actions, args.model)
-    Q_cap.load_state_dict(Q.state_dict())
-
-    if args.gpu >=0:
-        Q.cuda()
-        Q_cap.cuda()
-
+    Q_cap.set_weights(Q.get_weights())
+    
     ## Preprocessor
     preprocessor = AtariPreprocessor(input_shape, window)
 
@@ -190,8 +194,10 @@ def main():  # noqa: D103
                      target_update_freq = target_update_freq,
                      num_burn_in = num_burn_in,
                      train_freq = train_freq,
+                     eval_freq = eval_freq,
                      batch_size = batch_size,
                      epsilon = epsilon,
+                     num_actions = num_actions,
                      mode='train')
     
     agent.compile('adam', 'huber_loss')

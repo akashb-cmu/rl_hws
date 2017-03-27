@@ -2,7 +2,6 @@
 
 import numpy as np
 from PIL import Image
-import torch
 
 #from deeprl_hw2 import utils
 from deeprl_hw2.core import Preprocessor

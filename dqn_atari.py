@@ -183,7 +183,7 @@ def main():  # noqa: D103
     train_freq = 1
     eval_freq = args.eval_freq
     batch_size = args.batch_size
-    mem_size = arg.buffer
+    mem_size = args.buffer
     epsilon = 1 ## make a decreasing epsilon
 
     ## Initialise Q Model

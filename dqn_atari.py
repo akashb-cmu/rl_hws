@@ -154,6 +154,7 @@ def main():  # noqa: D103
     parser.add_argument('--eval_freq', default=40000, type=int, help='Evaluation Frequency')
     parser.add_argument('--target_update_freq',default=10000,type=int, help='Target Update Frequency')
     parser.add_argument('--tot_frames',default=5000000,type=int, help='Total Number of Frames')
+    parser.add_argument('--buffer',default=1000000,type=int, help='Buffer Size')
     
     args = parser.parse_args()
     name = Name(args, 'output', 'model')
@@ -182,6 +183,7 @@ def main():  # noqa: D103
     train_freq = 1
     eval_freq = args.eval_freq
     batch_size = args.batch_size
+    mem_size = arg.buffer
     epsilon = 1 ## make a decreasing epsilon
 
     ## Initialise Q Model
@@ -212,6 +214,7 @@ def main():  # noqa: D103
     
     agent.fit_akash(train_env,env,
                     tot_frames=tot_frames,
+                    mem_size=mem_size,
                     burn_in_time=num_burn_in,
                     eval_plot_period=eval_freq,
                     target_fix_freq=target_update_freq,

@@ -11,12 +11,14 @@ import gym
 
 #import deeprl_hw2 as tfrl
 from deeprl_hw2.dqn import DQNAgent
+from deeprl_hw2.log_utils import Name
 #from deeprl_hw2.preprocessors import *
 #from deeprl_hw2.core import ReplayMemory
 
 import pdb
 import keras.models as M
 import keras.layers as L
+
 
 class LinearModel():
     def __init__(self, window, input_shape, num_actions):
@@ -142,15 +144,18 @@ def get_output_folder(parent_dir, env_name):
 def main():  # noqa: D103
     parser = argparse.ArgumentParser(description='Run DQN on Atari Breakout')
     parser.add_argument('--env', default='SpaceInvaders-v0', help='Atari env name')
-    parser.add_argument(
-        '-o', '--output', default='atari-v0', help='Directory to save data to')
+    parser.add_argument('-o', '--output', default='atari-v0', help='Directory to save data to')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     parser.add_argument('-m','--model', default='linear', type=str, help='type of model')
-    parser.add_argument('--gpu', default=0, type=int, help='gpu (0 or more) vs cpu (-1)')
     parser.add_argument('--input_shape', default=[84,84], type=int, nargs='+', help='input shape')
-
+    parser.add_argument('--lr', default=0.0003, type=float, help='Learning Rate')
+    parser.add_argument('--batch_size', default=32, type=int, help='Batch Size')
+    parser.add_argument('--burn_in', default=50000, type=int, help='Burn In Time')
+    parser.add_argument('--eval_freq', default=10000, type=int, help='Evaluation Frequency')
+    parser.add_argument('--target_update_freq',default=5000,type=int, help='Target Update Frequency')
+    
     args = parser.parse_args()
-
+    name = Name(args, 'output', 'model')
 #    args.output = get_output_folder(args.output, args.env)
 
     # here is where you should start up a session,
@@ -163,17 +168,18 @@ def main():  # noqa: D103
     env = gym.make(args.env)
     env.reset()
     ## Arguments
+
     window = 4
     input_shape = args.input_shape
 
     num_actions = train_env.action_space.n
 
     gamma = 0.99
-    target_update_freq = 100
-    num_burn_in = 100000
+    target_update_freq = args.target_update_freq
+    num_burn_in = args.burn_in
     train_freq = 1
-    eval_freq = 10 # after no. of episodes
-    batch_size = 32
+    eval_freq = args.eval_freq
+    batch_size = args.batch_size
     epsilon = 1 ## make a decreasing epsilon
 
     ## Initialise Q Model
@@ -196,11 +202,17 @@ def main():  # noqa: D103
                      batch_size = batch_size,
                      epsilon = epsilon,
                      num_actions = num_actions,
+                     name=name,
+                     folder=args.output,
                      mode='train')
 
-    agent.compile('adam', 'huber_loss')
+    agent.compile('adam', 'huber_loss', args.lr)
     
-    agent.fit_akash(train_env,env, burn_in_time=0)
+    agent.fit_akash(train_env,env,
+                    burn_in_time=num_burn_in,
+                    eval_plot_period=eval_freq,
+                    target_fix_freq=target_update_freq,
+                    batch_size=batch_size)
     pdb.set_trace()
 
 if __name__ == '__main__':

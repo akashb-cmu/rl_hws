@@ -16,6 +16,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+import json
+
 class DQNAgent:
     """Class implementing DQN.
 
@@ -65,6 +67,8 @@ class DQNAgent:
                  batch_size,
                  epsilon,
                  num_actions,
+                 name,
+                 folder,
                  mode='train'):
 
         self.Q, self.Q_cap = q_network[0], q_network[1]
@@ -78,12 +82,14 @@ class DQNAgent:
         self.batch_size = batch_size
         self.epsilon = epsilon
         self.num_actions = num_actions
+        self.name = name
+        self.folder = folder
         self.mode = mode
         self.train_data = None
 
 
 
-    def compile(self, optimizer='adam', loss_func='huber_loss'):
+    def compile(self, optimizer='adam', loss_func='huber_loss', lr=0.0001):
         """
         Define the loss function and optimizer
         """
@@ -172,8 +178,8 @@ class DQNAgent:
     def fit_akash(self, train_env, eval_env, n_hist_history=4,
                   n_atari_history=4, crop_size=(84,84), block_size=(2,2), mem_size=1000000,
                   batch_size=32, eval_batch_size=100, gamma=0.99, start_epsilon=1.0, end_epsilon=0.1,
-                  epsilon_anneal_steps=1000000,
-                  tot_frames=10000000, eval_states=100, n_eval_episodes=20, eval_plot_period=30000, use_target_fix=True,
+                  epsilon_anneal_steps=1000000, tot_frames=10000000, eval_states=100,
+                  n_eval_episodes=20, eval_plot_period=30000, use_target_fix=True,
                   target_fix_freq=10000, burn_in_time=50000, video_freq=30000, render=False):
         train_replay_cache = ReplayMemory(max_size=mem_size)
         eval_replay_cache = ReplayMemory(max_size=5000)
@@ -218,6 +224,8 @@ class DQNAgent:
         frames_per_episode = 0.0
         eval_qs = []
         eval_rewards = []
+
+        results_dict = {'maxQ': eval_qs, 'evalReward': eval_rewards}
 
         evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q, num_updates=0, plot_qs=eval_qs, show=False)
 
@@ -274,185 +282,16 @@ class DQNAgent:
                 if i%eval_plot_period == 0:
                     evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q, num_updates=i-burn_in_time+1,
                                 plot_qs=eval_qs, show=False)
-                    evaluate_rewards(env=eval_env, preproc=eval_preproc, net=self.Q, n_episodes=n_eval_episodes,
+                    evaluate_rewards(env=eval_env, preproc=eval_preproc, net=self.Q, n_episodes=n_eval_episodes, name= self.name, folder=self.folder,
                                      iter_num=i-burn_in_time, rewards_history=eval_rewards, eval_epsilon=0.05,
                                      plot=False)
 
+                    ## save results
+                    with open(self.name('res','json', self.folder), 'w') as outfile:
+                        json.dump(results_dict, outfile)
 
-            if i>burn_in_time and use_target_fix and (i+1)%target_fix_freq == 0:
+                    
+
+            if i>burn_in_time and (i+1)%target_fix_freq == 0:
                 self.Q_cap.set_weights(self.Q.get_weights())
-
-    def fit(self, env, num_iterations, max_episode_length=None):
-        """Fit your model to the provided environment.
-
-        Its a good idea to print out things like loss, average reward,
-        Q-values, etc to see if your agent is actually improving.
-
-        You should probably also periodically save your network
-        weights and any other useful info.
-
-        This is where you should sample actions from your network,
-        collect experience samples and add them to your replay memory,
-        and update your network parameters.
-
-        Parameters
-        ----------
-        env: gym.Env
-          This is your Atari environment. You should wrap the
-          environment using the wrap_atari_env function in the
-          utils.py
-        num_iterations: int
-          How many samples/updates to perform.
-        max_episode_length: int
-          How long a single episode should last before the agent
-          resets. Can help exploration.
-        """
-
-        # count=0
-        # while count < self.num_burn_in:
-        #     ## reset environment
-        #     next_state = torch.Tensor(1, self.preprocessor.window, *self.preprocessor.new_size)
-        #     next_state_ = self.preprocessor.process_state_for_network(env.reset())
-        #     next_state[0, 0] = torch.Tensor(next_state_)
-        #     for k in range(1, self.preprocessor.window):
-        #         next_state_, _, _, _ = env.step(env.action_space.sample())
-        #         next_state_ = self.preprocessor.process_state_for_network(next_state_)
-        #         next_state[0, k] = torch.Tensor(next_state_)
-                
-        #     ## preprocess memory
-        #     next_state = torch.autograd.Variable(next_state).cuda()
-        #     while(1):
-        #         action = env.action_space.sample()
-        #         observation, reward, done, _ = env.step(action)
-
-        #         observation = self.preprocessor.process_state_for_network(observation)
-        #         state = next_state.cpu().cuda()
-        #         next_state[0,:-1] = next_state[0, 1:].data
-        #         next_state[0, -1] = torch.autograd.Variable(torch.Tensor(observation).cuda()).data
-                
-        #         ## append the new state to replay_memory
-        #         self.memory.add(state.cpu(), action, reward, next_state.cpu(), done)
-        #         count+=1
-        #         if count%1000==0:
-        #             print count
-        #         if done:
-        #             break
-
-
-        
-        global_count=0
-        next_state = np.zeros(tuple([1]+[self.preprocessor.window] +list(self.preprocessor.new_size)))
-
-        for i in tqdm(range(num_iterations)):
-            ## reset environment
-            next_state[0,0] = self.preprocessor.process_state_for_network(env.reset())
-
-            for k in range(1, self.preprocessor.window):
-                next_state_, _, _, _ = env.step(env.action_space.sample())
-                next_state[0,k] = self.preprocessor.process_state_for_network(next_state_)            
-            running_loss = 0
-            running_reward = list()
-            count = 0
-            time1 = 0
-            start2 = time()
-            while(1):
-                action = self.select_action(env, next_state)
-                observation, reward, done, _ = env.step(action)
-
-                observation = self.preprocessor.process_state_for_network(observation)
-                state = next_state.copy()
-                next_state[0,:-1] = next_state[0, 1:]
-                next_state[0, -1] = observation
-
-                ## append the new state to replay_memory
-                self.memory.add(state, action, reward, next_state, done)
-
-                ## sample states
-                sample = self.memory.sample(self.batch_size)
-                ## Calculate Q-values
-                Q_cap_values = self.calc_q_values(sample, self.Q_cap, flag=1)
-                # same as next state tensors, with dim (batch_size, num_channels, row, col)
-#                Q_values = self.calc_q_values(sample, self.Q, flag=0)
-                
-                ## loss function
-                #y = np.zeros((self.batch_size, self.num_actions))
-                y = self.calc_q_values(sample, self.Q, 0)
-                
-                for m in range(self.batch_size):
-                    act = np.argmax(Q_cap_values[m])
-                    if sample[m].is_terminal:
-                        y[m,act] = sample[m].reward
-                    else:
-                        y[m,act] = sample[m].reward + self.gamma * np.max(Q_cap_values[m])
-
-                start = time()                        
-                loss = self.Q.fit(self.train_data, y, epochs=1, batch_size=self.batch_size, verbose=0)
-                end = time()
-#                pdb.set_trace()
-                running_loss += loss.history['loss'][0]
-                running_reward.append(reward)
-                count+=1.0
-
-                global_count+=1.0
-
-                ## target fixing
-                if (global_count+1) % self.target_update_freq == 0 :
-                    self.Q_cap.set_weights(self.Q.get_weights())
-
-                time1 += end-start
-                end2 = time()
-                if done:
-                    break
-                
-            tqdm.write('Loss: %f, reward: %f, epsilon: %f, buffer: %f, time: %f, time2: %f, count: %d' % (running_loss/(count+1.0), np.sum(running_reward), self.epsilon, (len(self.memory.memory)*1.0)/self.memory.max_size, time1/(count*1.0), (end2-start2-time1)/(count*1.0),count))
-
-#            if (i+1) % self.eval_freq == 0:  
-#                running_reward_test = self.evaluate(env, num_episodes=10, max_episode_length=max_episode_length)
-#                tqdm.write('EVAL:: avg_reward: %f, std_dev: %f' %(np.mean(running_reward_test), np.std(running_reward_test)))
-        pdb.set_trace()
-                
-                
-
-    def evaluate(self, env, num_episodes, max_episode_length=None):
-        """Test your agent with a provided environment.
-        
-        You shouldn't update your network parameters here. Also if you
-        have any layers that vary in behavior between train/test time
-        (such as dropout or batch norm), you should set them to test.
-
-        Basically run your policy on the environment and collect stats
-        like cumulative reward, average episode length, etc.
-
-        You can also call the render function here if you want to
-        visually inspect your policy.
-        """
-        running_reward = []
-        for i in tqdm(range(num_episodes)):
-            ## reset environment
-            next_state = torch.Tensor(1, self.preprocessor.window, *self.preprocessor.new_size)
-            next_state_ = self.preprocessor.process_state_for_network(env.reset())
-            next_state[0, 0] = torch.Tensor(next_state_)
-            for k in range(1, self.preprocessor.window):
-                next_state_, _, _, _ = env.step(env.action_space.sample())
-                next_state_ = self.preprocessor.process_state_for_network(next_state_)
-                next_state[0, k] = torch.Tensor(next_state_)
-
-            ## preprocess memory
-            next_state = torch.autograd.Variable(next_state).cuda()
-
-            mini_reward = 0
-            #for j in range(max_episode_length):
-            while(1):
-                action = self.select_action(env, next_state)                    
-                observation, reward, done, _ = env.step(action)
-
-                observation = self.preprocessor.process_state_for_network(observation)
-                state = next_state.cpu().cuda()
-                next_state[0,:-1] = next_state[0, 1:].data
-
-                mini_reward+=reward
-                if done:
-                    break
-            running_reward.append(mini_reward)
-
-        return running_reward
+                self.Q_cap.save_weights(self.name('weights','h5',self.folder)) ## save model weights

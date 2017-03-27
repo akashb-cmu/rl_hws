@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 #from objectives import *
 from policy_akash import *
 import numpy as np
+import skvideo.io
 
 def get_action_mask(batch_q_values, actions):
     action_mask = np.zeros(batch_q_values.size(),dtype=np.float32)
@@ -38,7 +39,7 @@ def get_next_sample(env, preproc, action, prev_sample=None, render=False, ret_re
     if not ret_reward:
         return next_sample
     else:
-        return next_sample, reward
+        return next_sample, reward, observation
 
 def get_first_state(env, preproc, render=False, ret_reward=False):
     env.reset()
@@ -59,38 +60,44 @@ def evaluate_qs(eval_batch_curr_states, net, num_updates=None, plot_qs=None, sho
     eval_qs = net.predict_on_batch(eval_batch_curr_states)
     max_qs = eval_qs.max(axis=1)
     if plot_qs is not None and num_updates is not None:
-        plot_qs.append((num_updates, max_qs.mean()))
+        plot_qs.append([num_updates, float(max_qs.mean())])
     if show and plot_qs is not None and len(plot_qs)>0:
         xs = [tup[0] for tup in plot_qs]
         ys = [tup[1] for tup in plot_qs]
         plt.plot(xs, ys)
         plt.show()
 
-def evaluate_rewards(env, preproc, net, n_episodes, iter_num=None, rewards_history=None,
+def evaluate_rewards(env, preproc, net, n_episodes, name, folder, iter_num=None, rewards_history=None,
                      eval_epsilon=0.05, plot=False):
     # Ensure the env passed here is different from the env used for training
     eval_sample = get_first_state(env=env, preproc=preproc, render=False)
     rewards_list = []
     episode_reward = 0.0
     greedy_policy = GreedyEpsilonPolicy(epsilon=eval_epsilon)
-
+    vid = list()
     while n_episodes>0:
         if eval_sample.is_terminal:
             rewards_list.append(episode_reward)
             n_episodes -= 1
-            eval_sample, eval_reward = get_first_state(env=env, preproc=preproc, render=False, ret_reward=True)
+            eval_sample, eval_reward, observation = get_first_state(env=env, preproc=preproc, render=False, ret_reward=True)
             episode_reward = 0.0
+            ## write the video
+            vid.append(observation)
+            vid = np.stack(vid)
+            skvideo.io.vwrite(name('vid%2d'%(n_episodes),'mp4', '%s/vid%09d'%(folder,iter_num)), vid)
+            vid = list()
         else:
             action = get_action(preproc=preproc, prev_sample=eval_sample, policy=greedy_policy, q_net=net,
                                 use_gpu=True, is_train=False)
-            eval_sample, eval_reward = get_next_sample(env=env, preproc=preproc, action=action, prev_sample=eval_sample,
+            eval_sample, eval_reward, observation = get_next_sample(env=env, preproc=preproc, action=action, prev_sample=eval_sample,
                                           render=False, ret_reward=True)
         episode_reward += eval_reward
+        vid.append(observation)
 
     rewards_list = np.array(rewards_list)
 
     if iter_num is not None and rewards_history is not None:
-        rewards_history.append((iter_num, rewards_list.mean(), rewards_list.std()))
+        rewards_history.append([iter_num, float(rewards_list.mean()), float(rewards_list.std())])
     if plot and rewards_history is not None:
         xs = [tup[0] for tup in rewards_history]
         ys = [tup[1] for tup in rewards_history]

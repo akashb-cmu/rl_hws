@@ -421,12 +421,12 @@ class DQNAgent:
 
                 if i%eval_plot_period == 0:
                     evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q, num_updates=i-burn_in_time+1,
-                                plot_qs=eval_qs, show=False)
+                                plot_qs=eval_qs1, show=False)
                     evaluate_rewards(env=eval_env, preproc=eval_preproc, net=self.Q, n_episodes=n_eval_episodes, name= self.name, folder=self.folder,
                                      iter_num=i-burn_in_time, rewards_history=eval_rewards1, eval_epsilon=0.05,
                                      plot=False)
                     evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q_cap, num_updates=i-burn_in_time+1,
-                                plot_qs=eval_qs, show=False)
+                                plot_qs=eval_qs2, show=False)
                     evaluate_rewards(env=eval_env, preproc=eval_preproc, net=self.Q_cap, n_episodes=n_eval_episodes, name= self.name, folder=self.folder,
                                      iter_num=i-burn_in_time+1, rewards_history=eval_rewards2, eval_epsilon=0.05,
                                      plot=False)

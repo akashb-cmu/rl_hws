@@ -438,3 +438,129 @@ class DQNAgent:
             if i>burn_in_time and (i+1)%target_fix_freq == 0:
 #                self.Q_cap.set_weights(self.Q.get_weights())
                 self.Q.save_weights(self.name('weights','h5',self.folder)) ## save model weights
+
+    def fit_ddqn(self, train_env, eval_env, n_hist_history=4,
+                  n_atari_history=4, crop_size=(84,84), block_size=(2,2), mem_size=1000000,
+                  batch_size=32, eval_batch_size=100, gamma=0.99, start_epsilon=1.0, end_epsilon=0.1,
+                  epsilon_anneal_steps=1000000, tot_frames=10000000, eval_states=100,
+                  n_eval_episodes=20, eval_plot_period=30000, use_target_fix=True,
+                  target_fix_freq=10000, burn_in_time=50000, video_freq=30000, render=False):
+        train_replay_cache = ReplayMemory(max_size=mem_size)
+        eval_replay_cache = ReplayMemory(max_size=5000)
+        train_hist_preproc = HistoryPreprocessor(n_history=n_hist_history, flatten=False, crop_size=None,
+                                                 block_size=None,replay_mem_cache=train_replay_cache)
+        train_atari_preproc = AtariPreprocessor(n_history=n_atari_history, flatten=False, crop_size=crop_size,
+                                              block_size=block_size,replay_mem_cache=None)
+
+        train_preproc = PreprocessorSequence([train_atari_preproc, train_hist_preproc])
+
+        eval_hist_preproc = HistoryPreprocessor(n_history=n_hist_history, flatten=False, crop_size=None,
+                                                 block_size=None, replay_mem_cache=eval_replay_cache)
+
+        eval_atari_preproc = AtariPreprocessor(n_history=n_atari_history, flatten=False, crop_size=crop_size,
+                                                block_size=block_size, replay_mem_cache=None)
+
+        eval_preproc = PreprocessorSequence([eval_atari_preproc, eval_hist_preproc])
+
+        eval_sample = None
+
+        for i in range(5000):
+            if eval_sample is None or eval_sample.is_terminal:
+                eval_sample = get_first_state(env=eval_env,preproc=eval_preproc,render=render,ret_reward=False)
+            else:
+                action = eval_env.action_space.sample()
+                eval_sample = get_next_sample(env=eval_env,preproc=eval_preproc,action=action,prev_sample=eval_sample,
+                                              render=render,ret_reward=False)
+
+        q_eval_samples = eval_replay_cache.sample(batch_size=eval_batch_size)
+        q_eval_curr_states, q_eval_next_states, q_eval_actions, q_eval_rewards, q_is_terms = eval_preproc.process_batch(q_eval_samples)
+
+        prev_sample = None
+
+        exploration_policy = LinearDecayGreedyEpsilonPolicy(start_epsilon=start_epsilon, end_epsilon=end_epsilon,
+                                                            num_steps=epsilon_anneal_steps)
+
+        running_loss = 0.0
+        running_reward = []
+        episode_loss = 0.0
+        episode_reward = 0.0
+        episode_count = 0.0
+        frames_per_episode = 0.0
+        eval_qs = []
+        eval_rewards = []
+
+        results_dict = {'maxQ': eval_qs, 'evalReward': eval_rewards}
+
+#        evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q, num_updates=0, plot_qs=eval_qs, show=False)
+
+        for i in tqdm(range(tot_frames)):
+            if prev_sample is None or prev_sample.is_terminal:
+                if prev_sample is not None:
+                    tqdm.write('Avg. Loss: %f, Avg. Reward: %f, Epi Loss: %f, Epi Reward: %f,  epsilon: %f, '
+                               'buffer: %f, count: %d' %(running_loss / (i-burn_in_time+1.0),
+                                                 np.sum(running_reward)/(episode_count+1.0),
+                                                 episode_loss/(frames_per_episode*1.0),
+                                                 episode_reward,
+                                                 exploration_policy.curr_epsilon,
+                                                 (len(train_replay_cache.memory) * 1.0) / train_replay_cache.capacity,
+                                                 frames_per_episode))
+                if i > burn_in_time:
+                    episode_count += 1.0
+                    
+                prev_sample = get_first_state(env=train_env, preproc=train_preproc,render=render,ret_reward=False)
+                frames_per_episode = 1
+                episode_reward = 0
+                episode_loss = 0
+
+            else:
+                action = get_action(preproc=train_preproc, prev_sample=prev_sample, policy=exploration_policy,
+                                    q_net=self.Q,
+                                    is_train=True,use_gpu=True)
+                prev_sample = get_next_sample(env=train_env, preproc=train_preproc, action=action,
+                                              prev_sample=prev_sample, render=render)
+                frames_per_episode += 1
+ 
+
+            if i > burn_in_time:
+                sampled_experience_batch = train_replay_cache.sample(batch_size=batch_size)
+                batch_curr_states, batch_next_states, actions, rewards, is_terminals = train_preproc.process_batch(
+                    sampled_experience_batch)
+
+                ## choose the network
+                Q1 = self.Q
+                Q2 = self.Q_cap
+                    
+                y = Q1.predict_on_batch(batch_curr_states) # should return (batch_size, num_actions)
+                next_actions = y.argmax(axis=1)
+                next_pred = Q2.predict_on_batch(batch_next_states)
+                next_Q_values = np.choose(next_actions, next_pred.T)
+                target_vec = gamma*(next_Q_values) + rewards
+
+                # target_vec should have size (batch_size, )
+
+                for m in range(self.batch_size):
+                    if is_terminals[m]:
+                        y[m, next_actions[m]] = rewards[m]
+                    else:
+                        y[m, next_actions[m]] = target_vec[m]
+
+                loss = Q1.fit(batch_curr_states, y, epochs=1, batch_size=self.batch_size, verbose=0)
+                running_loss += loss.history['loss'][0]
+                running_reward.append(prev_sample.reward)
+                episode_reward += prev_sample.reward
+                episode_loss += loss.history['loss'][0]
+
+                if i%eval_plot_period == 0:
+                    evaluate_qs(eval_batch_curr_states=q_eval_curr_states, net=self.Q, num_updates=i-burn_in_time+1,
+                                plot_qs=eval_qs, show=False)
+                    evaluate_rewards(env=eval_env, preproc=eval_preproc, net=self.Q, n_episodes=n_eval_episodes, name= self.name, folder=self.folder,
+                                     iter_num=i-burn_in_time, rewards_history=eval_rewards, eval_epsilon=0.05,
+                                     plot=False)
+
+                    ## save results
+                    with open(self.name('res','json', self.folder), 'w') as outfile:
+                        json.dump(results_dict, outfile)                    
+
+            if i>burn_in_time and (i+1)%target_fix_freq == 0:
+                self.Q_cap.set_weights(self.Q.get_weights())
+                self.Q.save_weights(self.name('weights','h5',self.folder)) ## save model weights

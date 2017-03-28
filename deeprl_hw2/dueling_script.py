@@ -34,3 +34,38 @@ y = L.add([y1,y2])
 
 model= M.Model([x1,x2],y)
 out_val = model.predict_on_batch([val1,val2])
+
+# print(out_val-out_val_cap)
+#
+
+class DuelModel():
+    def __init__(self, window, input_shape, num_actions):
+        self.input = L.Input(shape=tuple([window] + list(input_shape)))
+        self.num_actions = num_actions
+        self.conv1_op = L.Conv2D(32, 8, strides=4, activation='relu', input_shape=tuple([window] + list(input_shape)),
+                                 data_format='channels_first')(self.input)
+        self.conv2_op = L.Conv2D(64, 4, strides=2, activation='relu', data_format='channels_first')(self.conv1_op)
+        self.conv3_op = L.Conv2D(64, 3, strides=1, activation='relu', data_format='channels_first')(self.conv2_op)
+        self.conv_flat = L.Flatten()(self.conv3_op)
+        self.stream_sv_fc1 = L.Dense(512, activation='relu')(self.conv_flat)
+        self.stream_sv_fc2 = L.Dense(1)(self.stream_sv_fc1)
+        self.stream_av_fc1 = L.Dense(512, activation='relu')(self.conv_flat)
+        self.stream_av_fc2 = L.Dense(self.num_actions)(self.stream_av_fc1)
+        self.stream_av_fc2 = MeanDiff(self.num_actions)(self.stream_av_fc2)
+        self.stream_sv_fc2 = L.RepeatVector(self.num_actions)(self.stream_sv_fc2)
+        self.stream_sv_fc2 = L.Reshape((self.num_actions,))(self.stream_sv_fc2)
+        self.combo_q_val = L.add([self.stream_av_fc2, self.stream_sv_fc2])
+        self.model = M.Model([self.input], self.combo_q_val)
+
+
+    def __call__(self):
+        return self.model
+
+tmodel = DuelModel(window=4, input_shape=[84,84], num_actions=6)()
+
+# tinput = np.random.rand(1,4,84,84)
+tinput = np.ones(shape=(1,4,84,84))
+
+top = tmodel.predict_on_batch(tinput)
+
+print(top)

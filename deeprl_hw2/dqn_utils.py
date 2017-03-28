@@ -84,7 +84,7 @@ def evaluate_rewards(env, preproc, net, n_episodes, name, folder, iter_num=None,
             ## write the video
             vid.append(observation)
             vid = np.stack(vid)
-            skvideo.io.vwrite(name('vid%2d'%(n_episodes),'mp4', '%s/vid%09d'%(folder,iter_num)), vid)
+            skvideo.io.vwrite(name('vid%02d'%(n_episodes),'mp4', '%s/vid%09d'%(folder,iter_num)), vid)
             vid = list()
         else:
             action = get_action(preproc=preproc, prev_sample=eval_sample, policy=greedy_policy, q_net=net,

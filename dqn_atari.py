@@ -147,6 +147,7 @@ def main():  # noqa: D103
     parser.add_argument('-o', '--output', default='atari-v0', help='Directory to save data to')
     parser.add_argument('--seed', default=0, type=int, help='Random seed')
     parser.add_argument('-m','--model', default='linear', type=str, help='type of model')
+    parser.add_argument('--rl', default='dqn', type=str, help='type of RL algo')
     parser.add_argument('--input_shape', default=[84,84], type=int, nargs='+', help='input shape')
     parser.add_argument('--lr', default=0.0003, type=float, help='Learning Rate')
     parser.add_argument('--batch_size', default=32, type=int, help='Batch Size')
@@ -196,7 +197,7 @@ def main():  # noqa: D103
 
     ## Memory
 #    memory = ReplayMemory(num_burn_in, window_length=window)
-    
+
     agent = DQNAgent(q_network = [Q, Q_cap],
                      gamma = gamma,
                      target_update_freq = target_update_freq,
@@ -211,14 +212,22 @@ def main():  # noqa: D103
                      mode='train')
 
     agent.compile('rmsprop', 'huber_loss', args.lr)
+
+    if args.rl == 'dqn':
+        fit_func = agent.fit_akash
+    elif args.rl == 'doubqn':
+        fit_func = agent.fit_doubqn
+    elif args.rl == 'ddqn':
+        fit_func = agent.fit_ddqn
+        
+    fit_func(train_env,env,
+             tot_frames=tot_frames,
+             mem_size=mem_size,
+             burn_in_time=num_burn_in,
+             eval_plot_period=eval_freq,
+             target_fix_freq=target_update_freq,
+             batch_size=batch_size)
     
-    agent.fit_akash(train_env,env,
-                    tot_frames=tot_frames,
-                    mem_size=mem_size,
-                    burn_in_time=num_burn_in,
-                    eval_plot_period=eval_freq,
-                    target_fix_freq=target_update_freq,
-                    batch_size=batch_size)
     pdb.set_trace()
 
 if __name__ == '__main__':
